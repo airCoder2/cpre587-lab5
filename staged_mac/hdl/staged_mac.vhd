@@ -23,7 +23,7 @@ use IEEE.numeric_std.all;
 entity staged_mac is
   generic(
       -- Parameters of mac
-      C_DATA_WIDTH : integer := 4
+      C_DATA_WIDTH : integer := 8
     );
 	port (
         ACLK	: in	std_logic;
