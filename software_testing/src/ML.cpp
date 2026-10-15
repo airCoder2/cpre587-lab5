@@ -37,7 +37,7 @@ namespace ML
         model.addLayer<ConvolutionalLayer>(
             LayerParams{sizeof(i8), {64, 64, 3}},                                    // Input Data
             LayerParams{sizeof(i8), {60, 60, 32}},                                   // Output Data
-            LayerParams{sizeof(i8), {5, 5, 3, 32}, modelPath / "quantized_model_data"/ weights_dir/ "conv2d_weights.bin"}, // Weights
+            LayerParams{sizeof(i8), {5, 3, 3, 32}, modelPath / "quantized_model_data"/ weights_dir/ "conv2d_weights.bin"}, // Weights
             LayerParams{sizeof(i32), {32}, modelPath / "quantized_model_data"/ biases_dir / "conv2d_biases.bin"}            // Bias
         );
 
@@ -47,7 +47,7 @@ namespace ML
         model.addLayer<ConvolutionalLayer>(
             LayerParams{sizeof(i8), {60, 60, 32}},                                    // Input Data
             LayerParams{sizeof(i8), {56, 56, 32}},                                   // Output Data
-            LayerParams{sizeof(i8), {5, 5, 32, 32}, modelPath / "quantized_model_data"/weights_dir / "conv2d_1_weights.bin"}, // Weights
+            LayerParams{sizeof(i8), {5, 3, 32, 32}, modelPath / "quantized_model_data"/weights_dir / "conv2d_1_weights.bin"}, // Weights
             LayerParams{sizeof(i32), {32}, modelPath / "quantized_model_data"/ biases_dir / "conv2d_1_biases.bin"}            // Bias
         );
 
@@ -65,7 +65,7 @@ namespace ML
         model.addLayer<ConvolutionalLayer>(
             LayerParams{sizeof(i8), {28, 28, 32}},                                    // Input Data
             LayerParams{sizeof(i8), {26, 26, 64}},                                   // Output Data
-            LayerParams{sizeof(i8), {3, 3, 32, 64}, modelPath / "quantized_model_data"/ weights_dir / "conv2d_2_weights.bin"}, // Weights
+            LayerParams{sizeof(i8), {3, 2, 32, 64}, modelPath / "quantized_model_data"/ weights_dir / "conv2d_2_weights.bin"}, // Weights
             LayerParams{sizeof(i32), {64}, modelPath / "quantized_model_data"/ biases_dir / "conv2d_2_biases.bin"}            // Bias
         );
 
@@ -75,7 +75,7 @@ namespace ML
         model.addLayer<ConvolutionalLayer>(
             LayerParams{sizeof(i8), {26, 26, 64}},                                    // Input Data
             LayerParams{sizeof(i8), {24, 24, 64}},                                   // Output Data
-            LayerParams{sizeof(i8), {3, 3, 64, 64}, modelPath / "quantized_model_data"/ weights_dir / "conv2d_3_weights.bin"}, // Weights
+            LayerParams{sizeof(i8), {3, 2, 64, 64}, modelPath / "quantized_model_data"/ weights_dir / "conv2d_3_weights.bin"}, // Weights
             LayerParams{sizeof(i32), {64}, modelPath / "quantized_model_data"/ biases_dir / "conv2d_3_biases.bin"}            // Bias
         );
 
@@ -93,7 +93,7 @@ namespace ML
         model.addLayer<ConvolutionalLayer>(
             LayerParams{sizeof(i8), {12, 12, 64}},                                    // Input Data
             LayerParams{sizeof(i8), {10, 10, 64}},                                   // Output Data
-            LayerParams{sizeof(i8), {3, 3, 64, 64}, modelPath / "quantized_model_data"/ weights_dir / "conv2d_4_weights.bin"}, // Weights
+            LayerParams{sizeof(i8), {3, 2, 64, 64}, modelPath / "quantized_model_data"/ weights_dir / "conv2d_4_weights.bin"}, // Weights
             LayerParams{sizeof(i32), {64}, modelPath / "quantized_model_data"/ biases_dir / "conv2d_4_biases.bin"}            // Bias
         );
 
@@ -103,7 +103,7 @@ namespace ML
         model.addLayer<ConvolutionalLayer>(
             LayerParams{sizeof(i8), {10, 10, 64}},                                    // Input Data
             LayerParams{sizeof(i8), {8, 8, 128}},                                   // Output Data
-            LayerParams{sizeof(i8), {3, 3, 64, 128}, modelPath / "quantized_model_data"/ weights_dir / "conv2d_5_weights.bin"}, // Weights
+            LayerParams{sizeof(i8), {3, 2, 64, 128}, modelPath / "quantized_model_data"/ weights_dir / "conv2d_5_weights.bin"}, // Weights
             LayerParams{sizeof(i32), {128}, modelPath / "quantized_model_data"/ biases_dir / "conv2d_5_biases.bin"}            // Bias
         );
 
@@ -129,7 +129,7 @@ namespace ML
         model.addLayer<DenseLayer>(
             LayerParams{sizeof(i8), {2048}},                                    // Input Data
             LayerParams{sizeof(i8), {256}},                                   // Output Data
-            LayerParams{sizeof(i8), {2048, 256}, modelPath / "quantized_model_data"/ weights_dir / "dense_weights.bin"}, // Weights
+            LayerParams{sizeof(i8), {256, 1024}, modelPath / "quantized_model_data"/ weights_dir / "dense_weights.bin"}, // Weights
             LayerParams{sizeof(i32), {256}, modelPath / "quantized_model_data"/ biases_dir/ "dense_biases.bin"}  ,    // Bias
             DenseLayer::ActivationType::ReLU
         );
@@ -140,7 +140,7 @@ namespace ML
         model.addLayer<DenseLayer>(
             LayerParams{sizeof(i8), {256}},                                    // Input Data
             LayerParams{sizeof(fp32), {200}},                                   // Output Data
-            LayerParams{sizeof(i8), {256, 200}, modelPath / "quantized_model_data"/ weights_dir / "dense_1_weights.bin"}, // Weights
+            LayerParams{sizeof(i8), {200, 128}, modelPath / "quantized_model_data"/ weights_dir / "dense_1_weights.bin"}, // Weights
             LayerParams{sizeof(i32), {200}, modelPath / "quantized_model_data"/ biases_dir / "dense_1_biases.bin"}  ,    // Bias
             DenseLayer::ActivationType::SoftMax
 
@@ -156,6 +156,9 @@ namespace ML
         return model;
     }
 
+    inline size_t get_image_flat_idx(size_t height_idx, size_t width_idx, size_t depth_idx, size_t image_w, size_t image_d){
+        return image_w * image_d * height_idx + image_d * width_idx + depth_idx;
+    }
 
     void runInferenceTest(const Model &model, const Path& input_image_bin, const Path& ground_truth_pred_path)
     {
@@ -185,7 +188,7 @@ namespace ML
 
         // Run inference on the model
         timer.start();
-        const LayerData &output = model.inference(quantized_image, Layer::InfType::ACCELERATED);
+        const LayerData &output = model.inference(quantized_image, Layer::InfType::NAIVE);
         timer.stop();
 
         // Compare the output

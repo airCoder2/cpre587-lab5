@@ -28,6 +28,10 @@ namespace ML
         return out_w * out_d * height_idx + out_d * width_idx + batch_idx;
     }
 
+    inline size_t get_kernel_flat_idx_cm(size_t height_idx, size_t width_idx, size_t depth_idx, size_t batch_idx, size_t kernel_w, size_t kernel_d, size_t kernel_h){
+        return (batch_idx * kernel_d * kernel_w * kernel_h + depth_idx * kernel_w * kernel_h + height_idx * kernel_w + width_idx);
+    }
+
     // Compute the convultion for the layer data
     // ME: the LayerData object passed has been loaded before (by img.loadData() no need to do it again)
     void ConvolutionalLayer::computeNaive(const LayerData &dataIn, const int layer_num) const
@@ -64,8 +68,8 @@ namespace ML
     
         // where I accumulate the sum
 
-        fp32 M;      
-        fp32 z_next; 
+        double M;      
+        double z_next; 
         
         // there should be a smarter way of doing this, but basically the idea is to choose the correct scale
         // if because layer_num + 1 might be 0
@@ -93,18 +97,25 @@ namespace ML
                     for (d = 0; d < kernel_d; d++){
                         for (i = 0; i < kernel_h; i++){
                             for (k = 0; k < kernel_w; k++){
+                                // WE ARE UNPACKING here.
+                                i8 weight = getWeightData().get<i8>(get_kernel_flat_idx_cm(i, k, d, b, kernel_w, kernel_d, kernel_h));
+
+                                i8 weight_low = static_cast<i8>((static_cast<ui8>(weight) & 0x0F) << 4) >> 4;
+                                i8 weight_high = static_cast<i8>((static_cast<ui8>(weight) & 0xF0)) >> 4;
+
+                                i8 activation_low = dataIn.get<i8>(get_image_flat_idx(j + i, l + 2*k, d, image_w, image_d));
+                                i8 activation_high = dataIn.get<i8>(get_image_flat_idx(j + i, l + 2*k + 1, d, image_w, image_d));
+
                                 sum += 
                                 (
-                                    getWeightData().get<i8>(get_kernel_flat_idx(i, k, d, b, kernel_w, kernel_d, kernel_b))
-                                    *
-                                    dataIn.get<i8>(get_image_flat_idx(j + i, l + k, d, image_w, image_d))
+                                    weight_low * activation_low + weight_high * activation_high
                                 );
                             }
                         }
                     }
 
-                    fp32 out_val = std::round(sum * M) + z_next;   // requantize
-                    out_val = std::clamp(out_val, z_next, max_value);                    // RELU 
+                    double out_val = std::round(sum * M) + z_next;   // requantize
+                    out_val = std::clamp(out_val, z_next, static_cast<double>(max_value));                    // RELU 
                     
                     // cast it to i8 and assign to output
                     getOutputData().get<i8>(get_out_flat_idx(j, l, b, out_w, kernel_b)) = static_cast<i8>(out_val);
@@ -135,8 +146,8 @@ namespace ML
     
         // where I accumulate the sum
 
-        fp32 M;      
-        fp32 z_next; 
+        double M;      
+        double z_next; 
         
         // there should be a smarter way of doing this, but basically the idea is to choose the correct scale
         // if because layer_num + 1 might be 0
@@ -164,22 +175,29 @@ namespace ML
                     for (d = 0; d < kernel_d; d++){
                         for (i = 0; i < kernel_h; i++){
                             for (k = 0; k < kernel_w; k++){
-                                i8 weight = getWeightData().get<i8>(get_kernel_flat_idx(i, k, d, b, kernel_w, kernel_d, kernel_b));
-                                i8 activation = dataIn.get<i8>(get_image_flat_idx(j + i, l + k, d, image_w, image_d));
+                                // WE ARE UNPACKING here.
+                                i8 weight = getWeightData().get<i8>(get_kernel_flat_idx_cm(i, k, d, b, kernel_w, kernel_d, kernel_h));
 
-                                // send these two by concatinating them
-                                Xil_Out32(XPAR_AXI_FIFO_0_BASEADDR + XLLF_TDFD_OFFSET, ML::concat_hex_to_i32(activation, weight)); 
+                                i8 weight_low = static_cast<i8>((static_cast<ui8>(weight) & 0x0F) << 4) >> 4;
+                                i8 weight_high = static_cast<i8>((static_cast<ui8>(weight) & 0xF0)) >> 4;
+
+                                i8 activation_low = dataIn.get<i8>(get_image_flat_idx(j + i, l + 2*k, d, image_w, image_d));
+                                i8 activation_high = dataIn.get<i8>(get_image_flat_idx(j + i, l + 2*k + 1, d, image_w, image_d));
+
+                                // send each pair by concatinating them (one send per multiplication)
+                                Xil_Out32(XPAR_AXI_FIFO_0_BASEADDR + XLLF_TDFD_OFFSET, ML::concat_hex_to_i32(activation_low, weight_low)); 
+                                Xil_Out32(XPAR_AXI_FIFO_0_BASEADDR + XLLF_TDFD_OFFSET, ML::concat_hex_to_i32(activation_high, weight_high)); 
                             }
                         }
                     }
                     // send TLAST and how many data we sent
-                    // we sent (d * i * k) + one_bias    each data that we sent was 4 bytes
-                    Xil_Out32(XPAR_AXI_FIFO_0_BASEADDR + XLLF_TLF_OFFSET, 4 * (d * i * k + 1));
+                    // we sent 2 * (d * i * k) + one_bias    each data that we sent was 4 bytes
+                    Xil_Out32(XPAR_AXI_FIFO_0_BASEADDR + XLLF_TLF_OFFSET, 4 * (2 * d * i * k + 1));
 
                     i32 mac_out = ML::read_packet();
 
-                    fp32 out_val = std::round(mac_out * M) + z_next;   // requantize
-                    out_val = std::clamp(out_val, z_next, max_value);                    // RELU 
+                    double out_val = std::round(mac_out * M) + z_next;   // requantize
+                    out_val = std::clamp(out_val, z_next, static_cast<double>(max_value));                    // RELU 
                     
                     // cast it to i8 and assign to output
                     getOutputData().get<i8>(get_out_flat_idx(j, l, b, out_w, kernel_b)) = static_cast<i8>(out_val);
