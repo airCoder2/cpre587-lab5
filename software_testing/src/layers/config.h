@@ -6,8 +6,8 @@
 #include <array>
 #include <cstdint>
 
-//#define QUANT_8_BIT
-#define QUANT_4_BIT
+#define QUANT_8_BIT
+//#define QUANT_4_BIT
 //#define QUANT_2_BIT
 
 #define ZEDBOARD
